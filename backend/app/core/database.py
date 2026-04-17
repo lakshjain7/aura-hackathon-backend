@@ -1,9 +1,9 @@
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
+from app.core.config import settings
 
-# Support falling back to sqlite if postgres is not available during dev
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./aura.db")
+# Use URL from central config
+DATABASE_URL = settings.DATABASE_URL
 
 # For asyncpg, the URL should typically look like: postgresql+asyncpg://user:pass@host/db
 engine = create_async_engine(

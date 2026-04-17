@@ -21,3 +21,4 @@ alembic
 pydub
 openai
 textblob
+langchain-openai
