@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
+
 
 from app.core.database import Base
 
@@ -23,8 +25,16 @@ class Complaint(Base):
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
     status = Column(String, default="pending") # pending, assigned, en_route, in_progress, resolved
-    officer_id = Column(String(36), nullable=True) # Assigned worker
+    officer_id = Column(String(36), ForeignKey("users.id"), nullable=True) 
+    citizen_id = Column(String(36), ForeignKey("users.id"), nullable=True) 
     cluster_id = Column(String(36), nullable=True)
+    source = Column(String, nullable=True) # 'whatsapp' or 'discord'
+
+    # Relationships
+    citizen = relationship("User", foreign_keys=[citizen_id])
+    officer = relationship("User", foreign_keys=[officer_id])
+
+
     
     created_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)

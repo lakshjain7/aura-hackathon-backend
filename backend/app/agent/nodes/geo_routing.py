@@ -44,11 +44,16 @@ async def geo_routing(state: AgentState) -> AgentState:
     assigned_dept = map_department(category)
     sla_deadline = calculate_sla(severity)
     
-    # 2. Assign a worker (We simulate this by picking a random officer or generating an ID for the hackathon)
-    assigned_officer_id = str(uuid.uuid4()) # In reality, we query the Users table for role == "officer" in that pincode.
+    # 2. Assign a worker (We simulate this by picking a mock officer from the DB)
+    from app.core.users import get_or_create_user
+    officer_user = await get_or_create_user(contact_id="AURA_OFFICER_01", role="officer")
+    assigned_officer_id = officer_user.id
     
-    # 3. Create/Update DB Record
-    complaint_id = str(uuid.uuid4()) # For simplification in this step. Usually created at ingestion.
+    # 3. Get or Create Citizen
+    citizen_user = await get_or_create_user(contact_id=state.get("sender_id"))
+    
+    # 4. Create/Update DB Record
+    complaint_id = str(uuid.uuid4())
     
     try:
         async with AsyncSessionLocal() as session:
@@ -60,12 +65,34 @@ async def geo_routing(state: AgentState) -> AgentState:
                 severity=severity,
                 confidence=state.get("confidence_score", 1.0),
                 department=assigned_dept,
-                status="assigned", # Starts the Domino's tracker!
-                officer_id=assigned_officer_id
+                status="assigned", 
+                officer_id=assigned_officer_id,
+                citizen_id=citizen_user.id,
+                source=state.get("source")
             )
             session.add(new_complaint)
             await session.commit()
-            print(f"Complaint {complaint_id} saved to DB and assigned to Officer {assigned_officer_id}")
+            print(f"Complaint {complaint_id} saved to DB. Citizen: {citizen_user.name}, Officer: {officer_user.name}")
+
+            
+            # 5. GLOBAL NOTIFICATION: Ping Discord so Officers see it!
+            try:
+                from app.services.discord_bot import client
+                # Find the first text channel or one named 'grievances'
+                for guild in client.guilds:
+                    channel = next((c for c in guild.text_channels if c.name == "grievances"), guild.text_channels[0])
+                    if channel:
+                        await channel.send(
+                            f"🚨 **NEW GRIEVANCE RECEIVED** ({state.get('source', 'Unknown')})\n"
+                            f"📁 **Category:** {category}\n"
+                            f"🔴 **Severity:** {severity}\n"
+                            f"📝 **Issue:** {state.get('original_text')}\n"
+                            f"🎫 **Ticket ID:** `{complaint_id}`\n"
+                            f"---"
+                        )
+            except Exception as e:
+                print(f"Global Discord Notification Error: {e}")
+
     except Exception as e:
         print(f"Database Routing Error: {e}")
 
@@ -74,6 +101,8 @@ async def geo_routing(state: AgentState) -> AgentState:
         **state,
         "department": assigned_dept,
         "sla_deadline": sla_deadline.isoformat(),
+        "complaint_id": complaint_id,
         "current_node": node_name,
+
         "history": state.get("history", []) + [f"Routed to {assigned_dept}. SLA Deadline: {sla_deadline}. Officer Assigned: {assigned_officer_id}. Status: assigned"]
     }

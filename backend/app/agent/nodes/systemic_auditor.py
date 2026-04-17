@@ -30,27 +30,40 @@ async def systemic_auditor(state: AgentState) -> AgentState:
         
         if cluster:
             cluster.count += 1
-            # Check for systemic threshold (e.g., 5 complaints in same area/category)
-            if cluster.count >= 5:
+            # MATH-BASED URGENCY ESCALATION
+            # Ratio = (Reports / Total Population)
+            impact_ratio = cluster.count / cluster.zone_population
+            
+            print(f"Community Impact: {cluster.count} reports out of {cluster.zone_population} people. Ratio: {impact_ratio:.2%}")
+            
+            if impact_ratio >= 0.05: # 5% of the community reporting = Critical
                 cluster.flagged_as_systemic = True
-                print(f"!!! SYSTEMIC FAILURE DETECTED in {pincode} for {category} !!!")
+                state["severity"] = "Critical"
+                print("!!! RATIO THRESHOLD EXCEEDED -> ESCALATING TO CRITICAL !!!")
+            elif impact_ratio >= 0.02: # 2% = High
+                state["severity"] = "High"
+            
             cluster_id = cluster.id
         else:
             # Create new cluster
             new_cluster = Cluster(
                 category=category,
                 pincode=pincode,
-                count=1
+                count=1,
+                zone_population=100 # Default simulation population
             )
             session.add(new_cluster)
-            await session.flush() # Get the ID
+            await session.flush()
             cluster_id = new_cluster.id
+
             
         await session.commit()
         
     return {
         **state,
         "cluster_id": cluster_id,
+        "severity": state.get("severity"),
         "current_node": node_name,
-        "history": state.get("history", []) + [f"Grouped into Cluster {cluster_id}. Check for systemic load."]
+        "history": state.get("history", []) + [f"Community Cluster {cluster_id} detected. Total reports: {cluster.count if cluster else 1}. Priority: {state.get('severity')}"]
     }
+
