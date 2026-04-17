@@ -1,7 +1,7 @@
-import os
 import redis.asyncio as redis
+from app.core.config import settings
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = settings.REDIS_URL
 
 # Create a connection pool instead of single connection for async efficiency
 redis_pool = redis.ConnectionPool.from_url(REDIS_URL, decode_responses=True)
