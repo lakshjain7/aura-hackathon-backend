@@ -34,8 +34,9 @@ Return ONLY JSON:
 {
     "category": "String",
     "severity": "String",
-    "pincode": "String (e.g., '500012') or null if not found",
+    "pincode": "String (Extract any mentioned pincode, area code, or location ID) or null if not found",
     "confidence": 0.0 to 1.0,
+
     "reasoning": "String explanation mapping to the rules"
 }
 """

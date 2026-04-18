@@ -143,9 +143,10 @@ async def twilio_webhook(
                     return Response(content=str(resp), media_type="application/xml")
 
             # B. Check for Proxy Chat (Active Ticket)
-            # Only enter proxy chat if it's NOT a new report (heuristic: doesn't contain a 6-digit pincode)
+            # Only enter proxy chat if it's NOT a new report (heuristic: doesn't contain a 3-6 digit pincode)
             import re
-            has_pincode = re.search(r'\b\d{6}\b', Body) if Body else False
+            has_pincode = re.search(r'\b\d{3,6}\b', Body) if Body else False
+
             
             active_res = await session.execute(
                 select(Complaint).where(

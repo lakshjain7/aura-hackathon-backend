@@ -16,12 +16,15 @@ async def systemic_auditor(state: AgentState) -> AgentState:
     category = state.get("category")
     pincode = state.get("pincode")
     image_url = state.get("image_url")
+    audio_url = state.get("audio_url")
     text = state.get("original_text", "").lower()
     
-    # STRICT INFO COLLECTION: Require Pincode AND Image for new issues
-    if not pincode or not image_url:
-        print(f"Auditor Alert: Missing critical info (Pin: {pincode}, Img: {'Yes' if image_url else 'No'}). Marking for info collection.")
+    # REQUIRE Pincode for all issues.
+    # REQUIRE Image UNLESS it's a rich Voice Report (audio provides its own proof)
+    if not pincode or (not image_url and not audio_url):
+        print(f"Auditor Alert: Missing critical info (Pin: {pincode}, Img: {'Yes' if image_url else 'No'}, Aud: {'Yes' if audio_url else 'No'}).")
         return {**state, "missing_info": True}
+
 
 
     is_duplicate = False
