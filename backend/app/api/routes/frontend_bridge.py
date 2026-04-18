@@ -50,14 +50,22 @@ async def login_citizen(data: dict, db: AsyncSession = Depends(get_db)):
 
 # --- COMPLAINT ENDPOINTS ---
 
+import logging
+logger = logging.getLogger(__name__)
+
 @router.post("/complaint")
 async def submit_complaint(
     raw_text: str = Form(...),
     pincode: Optional[str] = Form(None),
     lat: Optional[float] = Form(None),
     lng: Optional[float] = Form(None),
+    suburb: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
     language: str = Form("en"),
+    channel: str = Form("web"),
+    user_id: Optional[str] = Form(None),
     severity_hint: Optional[str] = Form("medium"),
+    phone: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -73,15 +81,19 @@ async def submit_complaint(
         "history": []
     }
 
+    complaint_id_str = None
+    severity = severity_hint or "medium"
 
     # Run graph and return result
     try:
         final_state = await aura_graph.ainvoke(initial_state)
-        return {
-            "status": "success", 
-            "complaint_id": final_state.get("complaint_id"),
+        complaint_id_str = final_state.get("complaint_id")
+        severity = final_state.get("severity") or severity
+        result = {
+            "status": "success",
+            "complaint_id": complaint_id_str,
             "category": final_state.get("category"),
-            "severity": final_state.get("severity")
+            "severity": severity
         }
     except Exception as e:
         print(f"Graph execution error: {e}")
@@ -96,7 +108,40 @@ async def submit_complaint(
         db.add(new_complaint)
         await db.commit()
         await db.refresh(new_complaint)
-        return {"status": "success", "complaint_id": str(new_complaint.id)}
+        complaint_id_str = str(new_complaint.id)
+        result = {"status": "success", "complaint_id": complaint_id_str}
+
+    # ── WhatsApp notification via Twilio ──
+    if phone and complaint_id_str:
+        from app.services.twilio_service import send_whatsapp_update
+        wa_number = phone.strip()
+        if not wa_number.startswith("+"):
+            wa_number = f"+91{wa_number}"
+        short_id = complaint_id_str[:8]
+        sev_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity.lower(), "🟡")
+        wa_msg = (
+            f"✅ *AURA — Complaint Received*\n\n"
+            f"🎫 *Tracking ID:* `{complaint_id_str}`\n"
+            f"{sev_emoji} *Severity:* {severity.upper()}\n"
+            f"💬 *Issue:* {raw_text[:150]}{'...' if len(raw_text) > 150 else ''}\n"
+            f"📍 *Pincode:* {pincode or 'N/A'}\n\n"
+            f"_AURA Civic Platform — Your voice matters._"
+        )
+        asyncio.create_task(asyncio.to_thread(send_whatsapp_update, wa_number, wa_msg))
+
+    # ── Discord channel notification ──
+    if complaint_id_str:
+        asyncio.create_task(_notify_discord(complaint_id_str, raw_text, severity, pincode or "", phone or ""))
+
+    return result
+
+
+async def _notify_discord(complaint_id: str, raw_text: str, severity: str, pincode: str, phone: str):
+    try:
+        from app.services.discord_bot import notify_new_complaint
+        await notify_new_complaint(complaint_id, raw_text, severity, pincode, phone)
+    except Exception as e:
+        logger.warning(f"Discord notification failed: {e}")
 
 @router.get("/complaints")
 async def get_user_complaints(user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
@@ -236,6 +281,68 @@ async def join_community(community_id: str, phone: str, db: AsyncSession = Depen
 
         
     return {"status": "success"}
+
+from pydantic import BaseModel
+
+class CommunityGroup(BaseModel):
+    id: str
+    name: str
+    channel_name: str
+    topic: str = ""
+
+class JoinCommunityRequest(BaseModel):
+    user_name: str
+    user_phone: str
+    groups: List[CommunityGroup]
+
+@router.post("/community/join")
+async def join_community_discord(data: JoinCommunityRequest):
+    """
+    For each selected group:
+    - Create Discord channel if it doesn't exist
+    - Post a join notification
+    Returns invite info + server name + channel details.
+    """
+    from app.services.discord_bot import get_or_create_community_channel
+
+    invite_info: dict = {}
+    joined_channels = []
+
+    for group in data.groups:
+        try:
+            result = await get_or_create_community_channel(
+                channel_name=group.channel_name,
+                topic=group.topic,
+                user_name=data.user_name,
+            )
+            if result:
+                invite_info = result
+            joined_channels.append({
+                "name": group.name,
+                "channel": group.channel_name,
+                "created": result.get("channel_created", False),
+            })
+        except Exception as e:
+            logger.warning(f"Discord join error for {group.channel_name}: {e}")
+            joined_channels.append({"name": group.name, "channel": group.channel_name, "created": False})
+
+    return {
+        "status": "success",
+        "message": f"Joined {len(joined_channels)} communities on Discord.",
+        "discord_invite": invite_info.get("url", ""),
+        "discord_invite_code": invite_info.get("code", ""),
+        "server_name": invite_info.get("server_name", "AURA Discord Server"),
+        "joined_channels": joined_channels,
+    }
+
+
+@router.get("/community/discord-invite")
+async def get_discord_invite():
+    """Return a permanent Discord server invite link with server info."""
+    from app.services.discord_bot import get_server_invite
+    info = await get_server_invite()
+    return info if info else {"url": "", "code": "", "server_name": "", "guild_id": ""}
+
 
 # --- OFFICER ENDPOINTS ---
 
