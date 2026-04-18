@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Phone, User, Check, ChevronRight, X } from 'lucide-react'
@@ -6,13 +6,6 @@ import { requestOTP, verifyOTP } from '../../utils/api'
 import { useToast } from '../../components/ui/Toast'
 import { BHASHINI_LANGUAGES } from '../../utils/constants'
 import { addPoints } from '../../utils/points'
-
-const WHATSAPP_GROUPS = [
-  { id: 'wg-001', name: 'Madhapur Ward 14 Residents', members: 342, topic: 'Sanitation & Roads', suburb: 'Madhapur' },
-  { id: 'wg-002', name: 'Gachibowli Water Issues', members: 218, topic: 'Water Supply', suburb: 'Gachibowli' },
-  { id: 'wg-003', name: 'HITEC City Civic Action', members: 567, topic: 'All Issues', suburb: 'HITEC City' },
-  { id: 'wg-004', name: 'Kondapur Residents Forum', members: 189, topic: 'Parks & Safety', suburb: 'Kondapur' },
-]
 
 const TOP_LANGS = ['en', 'hi', 'te', 'ta', 'kn', 'ml', 'bn', 'mr']
 const IMPACT_START = 50
@@ -29,10 +22,25 @@ export default function CitizenRegister() {
   const { addToast } = useToast()
 
   const [step, setStep] = useState(1)
-  const [form, setForm] = useState({ name: '', phone: '', language: 'en', pincode: '', suburb: 'Madhapur' })
+  const [communities, setCommunities] = useState([])
+  const [form, setForm] = useState({ name: '', phone: '', language: 'en', pincode: '', suburb: 'Madhapur', role: 'citizen' })
+  
+  useEffect(() => {
+    const fetchComms = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities`)
+        const data = await res.json()
+        setCommunities(data)
+      } catch (e) {
+        console.error("Failed to fetch communities", e)
+      }
+    }
+    fetchComms()
+  }, [])
   const [location, setLocation] = useState(null)
   const [locating, setLocating] = useState(false)
   const [selectedGroups, setSelectedGroups] = useState([])
+  const [showAddModal, setShowAddModal] = useState(false)
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [otpSent, setOtpSent] = useState(false)
   const [sending, setSending] = useState(false)
@@ -89,24 +97,37 @@ export default function CitizenRegister() {
     setVerifying(true)
     setOtpError('')
     try {
-      const res = await verifyOTP('+91' + form.phone, code)
-      if (res.data?.token) localStorage.setItem('aura_token', res.data.token)
-      else throw new Error()
-    } catch {
+      const res = await verifyOTP({ phone: '+91' + form.phone, otp: code })
+      if (res.data?.token) {
+        localStorage.setItem('aura_token', res.data.token)
+        localStorage.setItem('aura_user', JSON.stringify(res.data.user))
+        addToast('Welcome to AURA!', 'success')
+        setStep(3)
+      } else throw new Error()
+    } catch (e) {
       if (code !== '123456') {
         setOtpError('Invalid OTP. Use 123456 in demo.')
         setVerifying(false)
         return
       }
+      // Demo fallback
+      localStorage.setItem('aura_token', `${form.role}_${Date.now()}`)
+      localStorage.setItem('aura_user', JSON.stringify({ name: form.name, role: form.role, phone: form.phone }))
+      setStep(3)
     }
-    localStorage.setItem('aura_token', `citizen_${Date.now()}`)
-    localStorage.setItem('aura_role', 'citizen')
-    localStorage.setItem('aura_name', form.name)
-    localStorage.setItem('aura_phone', form.phone)
-    localStorage.setItem('aura_lang', form.language)
-    addPoints(IMPACT_START, 'Registered on AURA')
     setVerifying(false)
-    setStep(3)
+  }
+
+  const handleJoinGroup = async (group) => {
+    const isSelected = selectedGroups.includes(group.id)
+    if (isSelected) {
+      setSelectedGroups(s => s.filter(x => x !== group.id))
+    } else {
+      setSelectedGroups(s => [...s, group.id])
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities/${group.id}/join?phone=${form.phone}`, { method: 'POST' })
+      } catch (e) {}
+    }
   }
 
   const topLangs = BHASHINI_LANGUAGES.filter(l => TOP_LANGS.includes(l.code))
@@ -158,6 +179,24 @@ export default function CitizenRegister() {
             <motion.div key="step1" initial="hidden" animate="visible" exit="exit" variants={slideUp}>
               <div style={{ background: 'white', borderRadius: 20, border: '1px solid #E5E7EB', padding: '32px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 24 }}>Basic Information</h2>
+
+                {/* Role Selection */}
+                <div style={{ marginBottom: 24, display: 'flex', gap: 12 }}>
+                  <button onClick={() => update('role', 'citizen')} style={{
+                    flex: 1, padding: '10px', borderRadius: 12, border: `2px solid ${form.role === 'citizen' ? '#5B4CF5' : '#E5E7EB'}`,
+                    background: form.role === 'citizen' ? '#EEF0FF' : 'white', cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: form.role === 'citizen' ? '#5B4CF5' : '#6B7280' }}>Citizen</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>Report & Track</div>
+                  </button>
+                  <button onClick={() => update('role', 'officer')} style={{
+                    flex: 1, padding: '10px', borderRadius: 12, border: `2px solid ${form.role === 'officer' ? '#5B4CF5' : '#E5E7EB'}`,
+                    background: form.role === 'officer' ? '#EEF0FF' : 'white', cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: form.role === 'officer' ? '#5B4CF5' : '#6B7280' }}>Officer</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>Solve & Verify</div>
+                  </button>
+                </div>
 
                 {/* Name */}
                 <label style={{ display: 'block', marginBottom: 16 }}>
@@ -255,31 +294,91 @@ export default function CitizenRegister() {
                 <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 6 }}>Join Your Community</h2>
                 <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 24 }}>WhatsApp groups near {location?.suburb || 'your area'}</p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
-                  {WHATSAPP_GROUPS.map(group => {
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                  {communities.map(group => {
                     const selected = selectedGroups.includes(group.id)
                     return (
-                      <button key={group.id} onClick={() => setSelectedGroups(s => selected ? s.filter(x => x !== group.id) : [...s, group.id])} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px',
+                      <div key={group.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '16px',
                         borderRadius: 12, border: `1px solid ${selected ? '#5B4CF5' : '#E5E7EB'}`,
-                        background: selected ? '#EEF0FF' : '#F9FAFB', cursor: 'pointer', textAlign: 'left',
+                        background: selected ? '#EEF0FF' : '#F9FAFB', position: 'relative'
                       }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 2 }}>{group.name}</div>
+                        <button 
+                          onClick={() => handleJoinGroup(group)}
+                          style={{ flex: 1, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}
+                        >
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 2 }}>{group.name}</div>
                           <div style={{ fontSize: 12, color: '#6B7280' }}>{group.topic} · {group.members} members</div>
-                        </div>
+                        </button>
+                        
+                        <a href={group.link} target="_blank" rel="noreferrer" style={{ color: '#5B4CF5', padding: 8 }}>
+                          <X size={14} style={{ transform: 'rotate(45deg)' }} /> {/* External Link Icon */}
+                        </a>
+
                         <div style={{
-                          width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                          width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
                           background: selected ? '#5B4CF5' : 'white',
                           border: `2px solid ${selected ? '#5B4CF5' : '#D1D5DB'}`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                          {selected && <Check size={13} style={{ color: 'white' }} />}
+                          {selected && <Check size={12} style={{ color: 'white' }} />}
                         </div>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
+
+                <button 
+                  onClick={() => setShowAddModal(true)}
+                  style={{
+                    width: '100%', padding: '12px', borderRadius: 12, border: '2px dashed #D1D5DB',
+                    background: 'transparent', color: '#6B7280', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                  }}
+                >
+                  + Can't find your area? Create Local Watch Group
+                </button>
+
+                {showAddModal && (
+                  <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+                  }}>
+                    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ background: 'white', borderRadius: 24, padding: 32, width: '100%', maxWidth: 400 }}>
+                      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>New Community Group</h3>
+                      <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 20 }}>AURA AI will verify and propagate this group to your neighbors.</p>
+                      
+                      <input id="new-group-name" placeholder="Group Name (e.g. Kondapur Pothole Watch)" style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #E5E7EB', marginBottom: 12 }} />
+                      <input id="new-group-link" placeholder="WhatsApp Invite Link" style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #E5E7EB', marginBottom: 20 }} />
+                      
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #E5E7EB', background: 'white' }}>Cancel</button>
+                        <button onClick={async () => {
+                          const name = document.getElementById('new-group-name').value;
+                          const link = document.getElementById('new-group-link').value;
+                          if (!name || !link) return;
+                          
+                          const btn = document.getElementById('create-group-btn');
+                          btn.innerText = 'Provisioning Agent...';
+                          btn.disabled = true;
+
+                          await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                              name, link, 
+                              suburb: location?.suburb || 'General', 
+                              topic: 'Community Watch',
+                              phone: form.phone 
+                            })
+                          });
+                          
+                          addToast('AURA Agent Provisioned!', 'success');
+                          setTimeout(() => window.location.reload(), 1500);
+                        }} id="create-group-btn" style={{ flex: 1, padding: 12, borderRadius: 10, background: '#5B4CF5', color: 'white', border: 'none', cursor: 'pointer' }}>Create & Activate Bot</button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
 
                 <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 24 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 16 }}>Verify your number</div>
@@ -356,7 +455,7 @@ export default function CitizenRegister() {
                 )}
 
                 <button
-                  onClick={() => navigate('/citizen')}
+                  onClick={() => navigate(form.role === 'officer' ? '/officer' : '/citizen')}
                   style={{ width: '100%', padding: '14px', borderRadius: 12, background: '#5B4CF5', color: 'white', border: 'none', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
                 >
                   Go to My Dashboard →

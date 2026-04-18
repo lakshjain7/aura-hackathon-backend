@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./aura.db"
     REDIS_URL: str = "redis://localhost:6379"
     GOOGLE_MAPS_API_KEY: str = "placeholder_gmaps_key"
+    ADMIN_PHONE: str = "whatsapp:+919652809593"
 
     class Config:
         env_file = ".env"

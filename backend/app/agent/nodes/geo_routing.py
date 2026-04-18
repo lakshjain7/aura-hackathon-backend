@@ -6,6 +6,7 @@ from app.agent.state import AgentState
 from app.core.database import AsyncSessionLocal
 from app.models.complaint import Complaint
 from app.models.user import User
+from app.core.config import settings
 
 def map_department(category: str) -> str:
     mapping = {
@@ -50,13 +51,24 @@ async def geo_routing(state: AgentState) -> AgentState:
     assigned_officer_id = officer_user.id
     
     # 3. Get or Create Citizen
-    citizen_user = await get_or_create_user(contact_id=state.get("sender_id"))
+    citizen_user = await get_or_create_user(contact_id=state.get("sender_id", "web_user"))
     
     # 4. Create/Update DB Record
     complaint_id = str(uuid.uuid4())
-    
+    is_duplicate = state.get("is_duplicate", False)
+    missing_info = state.get("missing_info", False)
+
+    if missing_info:
+        print("Routing Skipped: Missing critical info.")
+        return {**state, "complaint_id": "MISSING_INFO", "status": "info_required"}
+
+    if is_duplicate:
+        print(f"Routing Skipped: Duplicate report for cluster {state.get('cluster_id')}")
+        return {**state, "complaint_id": f"DUP_{state.get('cluster_id')[:8]}", "status": "duplicate_linked"}
+
     try:
         async with AsyncSessionLocal() as session:
+
             new_complaint = Complaint(
                 id=complaint_id,
                 raw_text=state.get("original_text", ""),
@@ -68,17 +80,21 @@ async def geo_routing(state: AgentState) -> AgentState:
                 status="assigned", 
                 officer_id=assigned_officer_id,
                 citizen_id=citizen_user.id,
-                source=state.get("source")
+                source=state.get("source"),
+                lat=state.get("lat"),
+                lng=state.get("lng"),
+                pincode=state.get("pincode"),
+                image_url=state.get("image_url"),
+                audio_url=state.get("audio_url")
             )
+
             session.add(new_complaint)
             await session.commit()
             print(f"Complaint {complaint_id} saved to DB. Citizen: {citizen_user.name}, Officer: {officer_user.name}")
 
-            
-            # 5. GLOBAL NOTIFICATION: Ping Discord so Officers see it!
+            # 5. GLOBAL NOTIFICATION: Discord
             try:
                 from app.services.discord_bot import client
-                # Find the first text channel or one named 'grievances'
                 for guild in client.guilds:
                     channel = next((c for c in guild.text_channels if c.name == "grievances"), guild.text_channels[0])
                     if channel:
@@ -93,6 +109,24 @@ async def geo_routing(state: AgentState) -> AgentState:
             except Exception as e:
                 print(f"Global Discord Notification Error: {e}")
 
+            # 6. OFFICER WHATSAPP ALERT
+            try:
+                from app.services.twilio_service import send_whatsapp_update
+                officer_msg = (
+                    f"👮 *AURA OFFICER ALERT*\n\n"
+                    f"New Ticket: *{complaint_id[:8]}*\n"
+                    f"Category: {category}\n"
+                    f"Severity: {severity}\n"
+                    f"Issue: {state.get('original_text')[:100]}...\n\n"
+                    f"Reply with `!accept {complaint_id}` to take charge."
+                )
+                print(f"DEBUG: Sending Officer Alert to {settings.ADMIN_PHONE}")
+                send_whatsapp_update(settings.ADMIN_PHONE, officer_msg)
+            except Exception as e:
+                print(f"Officer WhatsApp Notification Error: {e}")
+
+
+
     except Exception as e:
         print(f"Database Routing Error: {e}")
 
@@ -103,6 +137,5 @@ async def geo_routing(state: AgentState) -> AgentState:
         "sla_deadline": sla_deadline.isoformat(),
         "complaint_id": complaint_id,
         "current_node": node_name,
-
-        "history": state.get("history", []) + [f"Routed to {assigned_dept}. SLA Deadline: {sla_deadline}. Officer Assigned: {assigned_officer_id}. Status: assigned"]
+        "history": state.get("history", []) + [f"Routed to {assigned_dept}. Officer Assigned: {assigned_officer_id}."]
     }

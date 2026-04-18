@@ -19,8 +19,10 @@ class Complaint(Base):
     anonymised_text = Column(String, nullable=True)
     category = Column(String, nullable=True)
     severity = Column(String, nullable=True)
+    summary = Column(String, nullable=True)
     confidence = Column(Float, nullable=True)
     department = Column(String, nullable=True)
+    suburb = Column(String, nullable=True)
     pincode = Column(String, nullable=True)
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
@@ -29,6 +31,9 @@ class Complaint(Base):
     citizen_id = Column(String(36), ForeignKey("users.id"), nullable=True) 
     cluster_id = Column(String(36), nullable=True)
     source = Column(String, nullable=True) # 'whatsapp' or 'discord'
+    image_url = Column(String, nullable=True)
+    audio_url = Column(String, nullable=True)
+
 
     # Relationships
     citizen = relationship("User", foreign_keys=[citizen_id])

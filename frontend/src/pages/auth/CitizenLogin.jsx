@@ -1,264 +1,204 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import Button from '../../components/ui/Button'
-import { BHASHINI_LANGUAGES } from '../../utils/constants'
-import { useLanguage } from '../../hooks/useLanguage'
-import { shake } from '../../animations/variants'
-import { requestOTP, verifyOTP } from '../../utils/api'
+import { useNavigate, Link } from 'react-router-dom'
+import { Phone, ArrowRight, ShieldCheck, Lock, AlertCircle } from 'lucide-react'
+import { login } from '../../utils/api'
 
 export default function CitizenLogin() {
   const navigate = useNavigate()
-  const { t } = useTranslation()
-  const { currentLang, setLanguage } = useLanguage()
   const [phone, setPhone] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
-  const [otp, setOtp] = useState(['', '', '', '', '', ''])
+  const [otp, setOtp] = useState('')
+  const [step, setStep] = useState(1) // 1: Phone, 2: OTP
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showGroups, setShowGroups] = useState(false)
-  const [joinedGroups, setJoinedGroups] = useState([])
-  const otpRefs = useRef([])
 
-  const WHATSAPP_GROUPS = [
-    { id: 'wg-001', name: 'Madhapur Ward 14 Residents', members: 342, topic: 'Sanitation & Roads', active: true },
-    { id: 'wg-002', name: 'Gachibowli Water Issues', members: 218, topic: 'Water Supply', active: false },
-    { id: 'wg-003', name: 'HITEC City Civic Action', members: 567, topic: 'All Issues', active: false },
-    { id: 'wg-004', name: 'Kondapur Residents Forum', members: 189, topic: 'Parks & Safety', active: false },
-  ]
-
-  const popularLangs = BHASHINI_LANGUAGES.slice(0, 6)
-
-  const handleSendOTP = async () => {
-    if (phone.length < 10) return
+  const handleRequestOtp = async (e) => {
+    e.preventDefault()
+    if (phone.length < 10) return setError('Please enter a valid phone number')
     setLoading(true)
     setError('')
     try {
-      await requestOTP('+91' + phone)
-      setOtpSent(true)
-    } catch {
-      // Demo fallback — always allows continuing
-      setOtpSent(true)
-    } finally {
+      // Mock OTP request for demo
+      setTimeout(() => {
+        setStep(2)
+        setLoading(false)
+      }, 1000)
+    } catch (err) {
+      setError('Failed to send OTP. Try again.')
       setLoading(false)
     }
   }
 
-  const handleOTPChange = (index, value) => {
-    if (value.length > 1) value = value[value.length - 1]
-    if (!/^\d*$/.test(value)) return
-    const newOtp = [...otp]
-    newOtp[index] = value
-    setOtp(newOtp)
-    setError('')
-    if (value && index < 5) otpRefs.current[index + 1]?.focus()
-  }
-
-  const handleOTPKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus()
-    }
-  }
-
-  const handleVerify = async () => {
-    const code = otp.join('')
-    if (code.length < 6) return
+  const handleVerify = async (e) => {
+    e.preventDefault()
     setLoading(true)
     setError('')
     try {
-      const res = await verifyOTP('+91' + phone, code)
-      const { token, role, user_id } = res.data
-
-      localStorage.setItem('aura_token', token)
-      localStorage.setItem('aura_role', role)
-      if (user_id) localStorage.setItem('aura_user_id', user_id)
-
-      if (role === 'officer') navigate('/officer')
-      else if (role === 'admin') navigate('/admin')
-      else setShowGroups(true)
-    } catch {
-      // Demo fallback — 123456 always works
-      if (code === '123456') {
-        localStorage.setItem('aura_token', 'citizen_demo')
-        localStorage.setItem('aura_role', 'citizen')
-        setShowGroups(true)
-      } else {
-        setError('Invalid OTP. Try 123456 for demo.')
-        setOtp(['', '', '', '', '', ''])
-        otpRefs.current[0]?.focus()
+      const res = await login({ phone, otp })
+      if (res.data.status === 'success') {
+        localStorage.setItem('aura_token', res.data.token)
+        localStorage.setItem('aura_user', JSON.stringify(res.data.user))
+        navigate('/citizen')
       }
-    } finally {
+    } catch (err) {
+      setError('Invalid OTP. Use 123456 for demo.')
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (otp.every(d => d !== '')) handleVerify()
-  }, [otp])
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--aura-bg-base)' }}>
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#FAFAF8', position: 'relative', overflow: 'hidden', padding: 20
+    }}>
+      {/* Background Orbs */}
+      <div style={{ position: 'absolute', top: '-10%', right: '-10%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(91,76,245,0.05) 0%, transparent 70%)' }} />
+      <div style={{ position: 'absolute', bottom: '-10%', left: '-10%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(22,163,74,0.05) 0%, transparent 70%)' }} />
+
       <motion.div
-        className="w-full max-w-sm rounded-xl p-6"
-        style={{ background: 'var(--aura-bg-surface)', border: '1px solid var(--aura-border)' }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        style={{
+          width: '100%', maxWidth: 420, background: 'white', borderRadius: 32,
+          padding: '48px 40px', boxShadow: '0 20px 50px rgba(0,0,0,0.05)',
+          border: '1px solid #E5E7EB', position: 'relative', zIndex: 1
+        }}
       >
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <div className="font-mono text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>AURA</div>
-          <div className="text-sm" style={{ color: 'var(--text-accent)' }}>{t('auth.citizen_title')}</div>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <Link to="/" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: '#5B4CF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: 'white', fontWeight: 900, fontSize: 18 }}>A</span>
+            </div>
+            <span style={{ fontSize: 20, fontWeight: 800, color: '#111827' }}>AURA</span>
+          </Link>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+            {step === 1 ? 'Welcome Back' : 'Verify Identity'}
+          </h2>
+          <p style={{ fontSize: 14, color: '#6B7280', marginTop: 8 }}>
+            {step === 1 ? 'Enter your WhatsApp number to continue' : `Enter the 6-digit code sent to +91 ${phone}`}
+          </p>
         </div>
 
-        {!otpSent ? (
-          <>
-            {/* Phone Input */}
-            <div className="mb-4">
-              <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-secondary)' }}>
-                {t('auth.phone_label')}
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-mono px-3 py-2 rounded-lg"
-                  style={{ background: 'var(--aura-bg-elevated)', color: 'var(--text-tertiary)', border: '1px solid var(--aura-border)' }}>
-                  +91
-                </span>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="9876543210"
-                  className="flex-1 h-10 px-3 rounded-lg text-sm font-mono outline-none"
-                  style={{
-                    background: 'var(--aura-bg-elevated)',
-                    border: '1px solid var(--aura-border)',
-                    color: 'var(--text-primary)',
-                  }}
-                  autoFocus
-                />
-              </div>
-            </div>
-            <Button className="w-full" size="lg" loading={loading} onClick={handleSendOTP}>
-              {loading ? t('auth.sending') : t('auth.get_otp')}
-            </Button>
-          </>
-        ) : (
-          <>
-            {/* OTP Input */}
-            <div className="mb-4">
-              <label className="text-xs mb-2 block text-center" style={{ color: 'var(--text-secondary)' }}>
-                Enter the 6-digit OTP sent to +91 {phone}
-              </label>
-              <motion.div
-                className="flex justify-center gap-2"
-                animate={error ? shake : {}}
-              >
-                {otp.map((digit, i) => (
+        <AnimatePresence mode="wait">
+          {step === 1 ? (
+            <motion.form
+              key="step1"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              onSubmit={handleRequestOtp}
+            >
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'block' }}>Phone Number</label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
+                    <Phone size={18} />
+                  </div>
                   <input
-                    key={i}
-                    ref={el => otpRefs.current[i] = el}
-                    type="text"
-                    inputMode="numeric"
-                    value={digit}
-                    onChange={e => handleOTPChange(i, e.target.value)}
-                    onKeyDown={e => handleOTPKeyDown(i, e)}
-                    className="w-12 h-12 text-center text-lg font-mono rounded-lg outline-none"
+                    type="tel"
+                    placeholder="98765 43210"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     style={{
-                      background: 'var(--aura-bg-elevated)',
-                      border: `1px solid ${error ? 'var(--sev-critical)' : digit ? 'var(--aura-accent)' : 'var(--aura-border)'}`,
-                      color: 'var(--text-primary)',
+                      width: '100%', padding: '16px 16px 16px 48px', borderRadius: 16,
+                      border: '1px solid #E5E7EB', fontSize: 16, outline: 'none',
+                      transition: 'border-color 0.2s', background: '#F9FAFB'
                     }}
-                    maxLength={1}
-                    autoFocus={i === 0}
                   />
-                ))}
-              </motion.div>
-              {error && (
-                <motion.p
-                  className="text-xs text-center mt-2"
-                  style={{ color: 'var(--sev-critical)' }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
-                  {error}
-                </motion.p>
-              )}
-            </div>
-            <Button className="w-full" size="lg" loading={loading} onClick={handleVerify}>
-              {loading ? t('auth.verifying') : t('auth.verify_otp')}
-            </Button>
-          </>
-        )}
-
-        {/* Language selector */}
-        <div className="mt-6 flex flex-wrap justify-center gap-1.5">
-          {popularLangs.map(lang => (
-            <button
-              key={lang.code}
-              onClick={() => setLanguage(lang.code)}
-              className="px-2 py-1 rounded text-[10px] cursor-pointer transition-all"
-              style={{
-                background: currentLang === lang.code ? 'var(--aura-accent)' : 'var(--aura-bg-elevated)',
-                border: `1px solid ${currentLang === lang.code ? 'var(--aura-accent)' : 'var(--aura-border)'}`,
-                color: currentLang === lang.code ? 'white' : 'var(--text-tertiary)',
-              }}
-            >
-              {lang.nativeName}
-            </button>
-          ))}
-        </div>
-
-        {/* First time link */}
-        <p style={{ textAlign: 'center', marginTop: 16 }}>
-          <button style={{ fontSize: 12, color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => navigate('/register')}>
-            New user? Register free →
-          </button>
-        </p>
-      </motion.div>
-
-      {/* WhatsApp Groups overlay after login */}
-      <AnimatePresence>
-        {showGroups && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }} />
-            <motion.div
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-              style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 51, background: 'white', borderRadius: '24px 24px 0 0', padding: '28px 24px 40px', maxHeight: '80vh', overflowY: 'auto' }}
-            >
-              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#E5E7EB', margin: '0 auto 24px' }} />
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 6 }}>Welcome back! 👋</div>
-              <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 24 }}>Join WhatsApp groups in your area to stay updated on complaints</div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                {WHATSAPP_GROUPS.map(group => {
-                  const joined = joinedGroups.includes(group.id)
-                  return (
-                    <div key={group.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: joined ? '#F0FDF4' : '#F9FAFB', borderRadius: 14, border: `1px solid ${joined ? '#BBF7D0' : '#E5E7EB'}` }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 2 }}>{group.name}</div>
-                        <div style={{ fontSize: 12, color: '#6B7280' }}>{group.topic} · {group.members} members {group.active && <span style={{ color: '#16A34A', fontWeight: 600 }}>· Active now</span>}</div>
-                      </div>
-                      <button
-                        onClick={() => setJoinedGroups(prev => joined ? prev.filter(x => x !== group.id) : [...prev, group.id])}
-                        style={{ marginLeft: 12, padding: '8px 16px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: joined ? '#DCFCE7' : '#5B4CF5', color: joined ? '#16A34A' : 'white', flexShrink: 0 }}
-                      >
-                        {joined ? '✓ Joined' : 'Join'}
-                      </button>
-                    </div>
-                  )
-                })}
+                </div>
               </div>
 
-              <button onClick={() => navigate('/citizen')} style={{ width: '100%', padding: '15px', borderRadius: 14, background: '#5B4CF5', color: 'white', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                {joinedGroups.length > 0 ? `Continue with ${joinedGroups.length} group${joinedGroups.length > 1 ? 's' : ''} →` : 'Skip for now →'}
+              {error && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#DC2626', fontSize: 13, marginBottom: 20 }}>
+                  <AlertCircle size={14} /> {error}
+                </div>
+              )}
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={loading}
+                style={{
+                  width: '100%', padding: '16px', borderRadius: 16, background: '#111827',
+                  color: 'white', border: 'none', fontSize: 15, fontWeight: 700,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                }}
+              >
+                {loading ? 'Sending...' : 'Request OTP'}
+                <ArrowRight size={18} />
+              </motion.button>
+            </motion.form>
+          ) : (
+            <motion.form
+              key="step2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              onSubmit={handleVerify}
+            >
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'block' }}>OTP Code</label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    style={{
+                      width: '100%', padding: '16px 16px 16px 48px', borderRadius: 16,
+                      border: '1px solid #E5E7EB', fontSize: 18, fontWeight: 700,
+                      letterSpacing: '0.5em', outline: 'none', background: '#F9FAFB'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#DC2626', fontSize: 13, marginBottom: 20 }}>
+                  <AlertCircle size={14} /> {error}
+                </div>
+              )}
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={loading}
+                style={{
+                  width: '100%', padding: '16px', borderRadius: 16, background: '#5B4CF5',
+                  color: 'white', border: 'none', fontSize: 15, fontWeight: 700,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  boxShadow: '0 10px 20px rgba(91,76,245,0.2)'
+                }}
+              >
+                {loading ? 'Verifying...' : 'Complete Sign In'}
+                <ShieldCheck size={18} />
+              </motion.button>
+
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                style={{
+                  width: '100%', marginTop: 20, background: 'none', border: 'none',
+                  color: '#6B7280', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                Change Phone Number
               </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+            </motion.form>
+          )}
+        </AnimatePresence>
+
+        <div style={{ marginTop: 40, paddingTop: 32, borderTop: '1px solid #F3F4F6', textAlign: 'center' }}>
+          <span style={{ fontSize: 13, color: '#9CA3AF' }}>Don't have an account? </span>
+          <Link to="/register" style={{ fontSize: 13, color: '#5B4CF5', fontWeight: 700, textDecoration: 'none' }}>Register Free</Link>
+        </div>
+      </motion.div>
     </div>
   )
 }

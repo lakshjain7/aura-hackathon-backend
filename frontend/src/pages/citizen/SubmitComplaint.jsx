@@ -74,6 +74,20 @@ export default function SubmitComplaint() {
   const { form, step, setStep, updateField, handlePhotoUpload, handleGetLocation, prefill } = useComplaintForm()
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [locationData, setLocationData] = useState({ lat: null, lng: null })
+  
+  // Capture GPS on mount
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        setLocationData({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        })
+      })
+    }
+  }, [])
+  
   const [submitted, setSubmitted] = useState(false)
   const [complaintId, setComplaintId] = useState(null)
   const [submitError, setSubmitError] = useState(null)
@@ -135,6 +149,8 @@ export default function SubmitComplaint() {
       fd.append('raw_text', form.text)
       fd.append('language', form.language || currentLang)
       fd.append('pincode', form.pincode || '')
+      if (locationData.lat) fd.append('lat', locationData.lat)
+      if (locationData.lng) fd.append('lng', locationData.lng)
       fd.append('severity_hint', form.severity || form.urgency || 'medium')
       if (form.photo) fd.append('image', form.photo)
 

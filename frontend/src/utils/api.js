@@ -73,8 +73,11 @@ export const getAuditLogs = () =>
 export const requestOTP = (phone) =>
   api.post('/api/auth/request-otp', { phone })
 
-export const verifyOTP = (phone, otp) =>
-  api.post('/api/auth/verify-otp', { phone, otp })
+export const verifyOTP = (data) =>
+  api.post('/api/auth/verify-otp', data)
+
+export const login = verifyOTP
+export const register = (data) => api.post('/api/auth/register', data)
 
 export const getUserProfile = () =>
   api.get('/api/user/profile')

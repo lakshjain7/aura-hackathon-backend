@@ -1,12 +1,22 @@
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { ArrowLeft, User, Bell } from 'lucide-react'
+import { ArrowLeft, User, Bell, LogOut } from 'lucide-react'
 
 export default function Navbar() {
   const navigate = useNavigate()
   const location = useLocation()
   const isHome = location.pathname === '/'
   
+  // Check if user is logged in
+  const token = localStorage.getItem('aura_token')
+  const user = JSON.parse(localStorage.getItem('aura_user') || '{}')
+
+  const handleLogout = () => {
+    localStorage.removeItem('aura_token')
+    localStorage.removeItem('aura_user')
+    navigate('/login')
+  }
+
   return (
     <nav style={{
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
@@ -55,17 +65,41 @@ export default function Navbar() {
         >
           <Bell size={20} />
         </motion.button>
-        
-        <motion.button
-          onClick={() => navigate('/login')}
-          style={{
-            padding: '10px 20px', borderRadius: 20, background: '#111827',
-            color: 'white', border: 'none', fontSize: 13, fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          Sign In
-        </motion.button>
+
+        {token ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User size={16} color="#4B5563" />
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{user.name || 'Citizen'}</span>
+            </div>
+            <motion.button
+              onClick={handleLogout}
+              whileTap={{ scale: 0.95 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 12px', borderRadius: 12, border: '1px solid #FEE2E2',
+                background: '#FEF2F2', color: '#DC2626', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <LogOut size={14} />
+              Sign Out
+            </motion.button>
+          </div>
+        ) : (
+          <motion.button
+            onClick={() => navigate('/login')}
+            style={{
+              padding: '10px 20px', borderRadius: 20, background: '#111827',
+              color: 'white', border: 'none', fontSize: 13, fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Sign In
+          </motion.button>
+        )}
       </div>
     </nav>
   )

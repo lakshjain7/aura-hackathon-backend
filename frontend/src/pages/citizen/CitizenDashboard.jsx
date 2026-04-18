@@ -5,6 +5,7 @@ import { Camera, FileText, Search, Trophy, Users, Star, ChevronRight, MapPin } f
 import StatusBadge from '../../components/shared/StatusBadge'
 import { getMyComplaints } from '../../utils/api'
 import { getImpactPoints, getPointsLog } from '../../utils/points'
+import { useToast } from '../../components/ui/Toast'
 
 const MOCK_COMPLAINTS = [
   { id: 'GR-2026-0847', category: 'Sanitation', summary: 'Garbage not collected for 5 days near MG Road', location: 'Ward 14, Madhapur', status: 'in_progress', submittedAt: new Date(Date.now() - 6 * 3600000).toISOString(), progress: 60 },
@@ -19,9 +20,10 @@ const MOCK_LEADERBOARD = [
   { rank: 4, name: 'You', points: 0, complaints: 0, ward: 'Ward 14', isYou: true },
 ]
 
-const WHATSAPP_COMMUNITIES = [
-  { name: 'Madhapur Ward 14 Residents', members: 342, unread: 3 },
-  { name: 'HITEC City Civic Action', members: 567, unread: 7 },
+const LIVE_EVENTS = [
+  { type: 'join', user: 'Abhishek', group: 'Ward 14 Residents', time: '2m ago' },
+  { type: 'officer', msg: 'Officer Rajesh accepted Ticket #847', time: '12m ago' },
+  { type: 'cluster', msg: 'Systemic Issue detected in Ward 14', time: '30m ago' },
 ]
 
 const PROGRESS_STAGES = ['Submitted', 'Classified', 'Assigned', 'In Progress', 'Resolved']
@@ -33,7 +35,10 @@ function getStageIndex(status) {
 
 export default function CitizenDashboard() {
   const navigate = useNavigate()
+  const { addToast } = useToast()
   const [complaints, setComplaints] = useState(MOCK_COMPLAINTS)
+  const [communities, setCommunities] = useState([])
+  const [showAddModal, setShowAddModal] = useState(false)
   const [points, setPoints] = useState(0)
   const [pointsLog, setPointsLog] = useState([])
   const [loading, setLoading] = useState(false)
@@ -41,26 +46,49 @@ export default function CitizenDashboard() {
   const name = localStorage.getItem('aura_name') || 'Citizen'
   const phone = localStorage.getItem('aura_phone') || ''
 
+  const [feedItems, setFeedItems] = useState([])
+  const [activeWard, setActiveWard] = useState('WARD 14')
+  
   useEffect(() => {
     setPoints(getImpactPoints())
     setPointsLog(getPointsLog())
-  }, [])
-
-  useEffect(() => {
-    const fetchComplaints = async () => {
-      setLoading(true)
+    
+    const fetchData = async () => {
       try {
-        const res = await getMyComplaints(phone)
-        const data = res.data.complaints || res.data
+        const resComms = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities`)
+        const commData = await resComms.json()
+        setCommunities(commData)
+        
+        // Fetch activity logs (virtual group chat)
+        const resActivity = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/activity`)
+        const activityData = await resActivity.json()
+        
+        const combinedFeed = [
+          ...activityData.map(a => ({ type: 'activity', user: a.user_name, msg: a.message, time: 'Just now' })),
+          ...feedData.map(f => ({ type: 'complaint', user: f.user_id?.slice(-4) || 'Citizen', msg: `${f.category}: ${f.summary}`, time: 'Recently' }))
+        ]
+        setFeedItems(combinedFeed.slice(0, 8))
+        
+        setLoading(true)
+        const resComp = await getMyComplaints(phone)
+        const data = resComp.data.complaints || resComp.data
         if (Array.isArray(data) && data.length > 0) setComplaints(data)
-        else setComplaints(MOCK_COMPLAINTS)
-      } catch {
-        setComplaints(MOCK_COMPLAINTS)
+        setLoading(false)
+      } catch (e) {
+        setLoading(false)
       }
-      setLoading(false)
     }
-    fetchComplaints()
+    fetchData()
   }, [phone])
+
+  const handleJoinGroup = async (group) => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities/${group.id}/join?phone=${phone}`, { method: 'POST' })
+      // Refresh counts
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities`)
+      setCommunities(await res.json())
+    } catch (e) {}
+  }
 
   const leaderboard = MOCK_LEADERBOARD.map(l => l.isYou ? { ...l, points, complaints: complaints.length } : l)
 
@@ -73,19 +101,6 @@ export default function CitizenDashboard() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F1F5F9', fontFamily: 'var(--font-sans)' }}>
-
-      {/* Top nav */}
-      <div style={{ background: 'white', borderBottom: '1px solid #E2E8F0', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: '#5B4CF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: 'white', fontWeight: 800, fontSize: 13, fontFamily: 'var(--font-mono)' }}>A</span>
-          </div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>AURA</span>
-        </div>
-        <button onClick={() => { localStorage.removeItem('aura_token'); navigate('/') }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6B7280' }}>
-          Sign out
-        </button>
-      </div>
 
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 80px' }}>
 
@@ -222,9 +237,52 @@ export default function CitizenDashboard() {
           </div>
         </motion.div>
 
+        {/* Live Activity Feed */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.24 }}
+          style={{ background: 'white', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', marginBottom: 20 }}
+        >
+          <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', boxShadow: '0 0 8px #EF4444' }} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>AURA Neighborhood Feed</div>
+            </div>
+            <select 
+              onChange={(e) => {
+                const ward = e.target.value;
+                setActiveWard(ward);
+                addToast(`Filtering for ${ward}`, 'info');
+              }}
+              style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', outline: 'none' }}
+            >
+              <option>WARD 14 ACTIVE</option>
+              <option>ALL WARDS</option>
+            </select>
+          </div>
+          <div style={{ paddingBottom: 8 }}>
+            {feedItems.length > 0 ? feedItems.map((e, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', padding: '14px 20px', borderBottom: i < feedItems.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
+                  <span style={{ fontSize: 14 }}>📢</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: '#374151' }}>
+                    <b>Citizen ...{e.user}</b> reported: {e.msg}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{e.time}</div>
+                </div>
+              </div>
+            )) : (
+              <div style={{ padding: '32px 20px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+                No recent neighborhood activity
+              </div>
+            )}
+          </div>
+        </motion.div>
+
         {/* WhatsApp communities */}
         <motion.div
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.26 }}
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.28 }}
           style={{ background: 'white', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' }}
         >
           <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -232,23 +290,83 @@ export default function CitizenDashboard() {
             <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>Your Communities</div>
           </div>
           <div style={{ paddingBottom: 8 }}>
-            {WHATSAPP_COMMUNITIES.map((c, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderBottom: i < WHATSAPP_COMMUNITIES.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+            {communities.map((c, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '14px 20px', borderBottom: i < communities.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
                   <Users size={16} style={{ color: '#16A34A' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{c.name}</div>
-                  <div style={{ fontSize: 12, color: '#6B7280' }}>{c.members} members</div>
+                  <div style={{ fontSize: 12, color: '#6B7280' }}>{c.members_count} members</div>
                 </div>
-                {c.unread > 0 && (
-                  <span style={{ background: '#5B4CF5', color: 'white', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{c.unread}</span>
-                )}
+                <a 
+                  href={c.link} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={() => handleJoinGroup(c)}
+                  style={{ 
+                    padding: '6px 14px', borderRadius: 8, background: '#16A34A', color: 'white', 
+                    fontSize: 12, fontWeight: 700, textDecoration: 'none' 
+                  }}
+                >
+                  Join
+                </a>
               </div>
             ))}
           </div>
-        </motion.div>
+          <button 
+            onClick={() => setShowAddModal(true)}
+            style={{
+              width: 'calc(100% - 40px)', margin: '8px 20px 20px', padding: '12px',
+              borderRadius: 12, border: '2px dashed #E2E8F0', background: 'transparent',
+              color: '#6B7280', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+            }}
+          >
+            + Create New Watch Group for your area
+          </button>
 
+          {showAddModal && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+            }}>
+              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ background: 'white', borderRadius: 24, padding: 32, width: '100%', maxWidth: 400 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: '#111827' }}>New Community Group</h3>
+                <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 20 }}>AURA AI will verify and provision this group for your ward.</p>
+                
+                <input id="dash-group-name" placeholder="Group Name (e.g. Madhapur Sanitation)" style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #E5E7EB', marginBottom: 12 }} />
+                <input id="dash-group-link" placeholder="WhatsApp Invite Link" style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #E5E7EB', marginBottom: 20 }} />
+                
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #E5E7EB', background: 'white', color: '#374151' }}>Cancel</button>
+                  <button onClick={async () => {
+                    const name = document.getElementById('dash-group-name').value;
+                    const link = document.getElementById('dash-group-link').value;
+                    if (!name || !link) return;
+                    
+                    const btn = document.getElementById('dash-create-btn');
+                    btn.innerText = 'Provisioning Agent...';
+                    btn.disabled = true;
+
+                    await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/communities`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        name, link, 
+                        suburb: 'Madhapur', 
+                        topic: 'Community Watch',
+                        phone: phone 
+                      })
+                    });
+                    
+                    addToast('AURA Agent Provisioned!', 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                  }} id="dash-create-btn" style={{ flex: 1, padding: 12, borderRadius: 10, background: '#5B4CF5', color: 'white', border: 'none', cursor: 'pointer' }}>Activate Agent</button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </motion.div>
       </div>
     </div>
   )

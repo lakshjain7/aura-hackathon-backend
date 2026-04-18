@@ -39,11 +39,19 @@ def define_graph():
         }
     )
 
-    workflow.add_edge("classify", "routing")
-    workflow.add_edge("routing", "auditor")
-    workflow.add_edge("auditor", "resolution")
+    workflow.add_conditional_edges(
+        "classify",
+        lambda state: "auditor" if (state.get("pincode") or state.get("lat")) else "correction",
+        {
+            "auditor": "auditor",
+            "correction": "correction" # Jump to correction to handle the missing info message
+        }
+    )
+    workflow.add_edge("auditor", "routing")
+    workflow.add_edge("routing", "resolution")
     workflow.add_edge("resolution", "correction")
     workflow.add_edge("correction", END)
+
 
     # 5. Compile
     return workflow.compile()

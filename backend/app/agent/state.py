@@ -10,7 +10,9 @@ class AgentState(TypedDict):
     original_text: str
     translated_text: Optional[str]
     image_url: Optional[str]
+    audio_url: Optional[str]
     source: str # "whatsapp", "discord"
+
     sender_id: str
     
     # Security Supervisor Check
@@ -28,11 +30,15 @@ class AgentState(TypedDict):
     
     # Routing & SLA
     department: Optional[str]
+    pincode: Optional[str]
     geography: Optional[dict] # {"lat": float, "lng": float}
     sla_deadline: Optional[str] # ISO format datetime
     
     # Clustering (Systemic Auditor)
     cluster_id: Optional[str]
+    is_duplicate: Optional[bool]
+    missing_info: Optional[bool]
+
     
     # Resolution (Dual-Key Handshake)
     officer_resolution_status: bool

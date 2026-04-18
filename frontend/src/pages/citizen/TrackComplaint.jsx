@@ -299,17 +299,30 @@ export default function TrackComplaint() {
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 }}
           style={{ background: 'white', borderRadius: 20, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
         >
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 4 }}>Stay Updated via WhatsApp</div>
-          <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>Join your local group to track this and other complaints</div>
-          {WHATSAPP_GROUPS.map((g, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#F9FAFB', borderRadius: 10, marginBottom: i < WHATSAPP_GROUPS.length - 1 ? 8 : 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 16 }}>Stay Updated via WhatsApp</div>
+          {[
+            { name: 'Madhapur Ward 14 Residents', desc: 'Sanitation & Roads · 342 members', link: 'https://chat.whatsapp.com/I0vSfFlj2luDBPLMbcvEe3' },
+            { name: 'HITEC City Civic Action', desc: 'All Issues · 567 members', link: 'https://chat.whatsapp.com/EpT93gyXWYB0vBSEQRV8vr' },
+            { name: 'Sanitation Watch Group', desc: 'Immediate Alerts · 128 members', link: 'https://chat.whatsapp.com/Jy5KyRO3igjEL7W54UUjVT' }
+          ].map((group, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', marginBottom: i < 2 ? 8 : 0 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{g.name}</div>
-                <div style={{ fontSize: 11, color: '#6B7280' }}>{g.topic} · {g.members} members</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{group.name}</div>
+                <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{group.desc}</div>
               </div>
-              <button style={{ padding: '7px 14px', borderRadius: 8, background: '#DCFCE7', color: '#16A34A', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <motion.a
+                href={group.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  padding: '8px 16px', background: '#ECFDF5', color: '#059669',
+                  borderRadius: 8, fontSize: 12, fontWeight: 700, textDecoration: 'none'
+                }}
+              >
                 Join
-              </button>
+              </motion.a>
             </div>
           ))}
         </motion.div>

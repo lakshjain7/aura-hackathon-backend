@@ -34,10 +34,12 @@ Return ONLY JSON:
 {
     "category": "String",
     "severity": "String",
+    "pincode": "String (e.g., '500012') or null if not found",
     "confidence": 0.0 to 1.0,
     "reasoning": "String explanation mapping to the rules"
 }
 """
+
 
 async def priority_classify(state: AgentState) -> AgentState:
     """
@@ -85,10 +87,12 @@ async def priority_classify(state: AgentState) -> AgentState:
         result = json.loads(content)
         category = result.get("category", "Other")
         severity = result.get("severity", "Medium")
+        pincode = result.get("pincode")
         confidence = float(result.get("confidence", 0.5))
         reasoning = result.get("reasoning", "")
         
-        print(f"Classified -> {category} | {severity} | Confidence: {confidence}")
+        print(f"Classified -> {category} | {severity} | Pincode: {pincode} | Confidence: {confidence}")
+
         
     except Exception as e:
         print(f"Classification Error: {e}")
@@ -108,10 +112,12 @@ async def priority_classify(state: AgentState) -> AgentState:
         **state,
         "category": category,
         "severity": severity,
+        "pincode": pincode or state.get("pincode"),
         "confidence_score": confidence,
         "sentiment_score": sentiment_score,
         "historical_count": historical_count,
         "needs_human_review": needs_human,
+
         "current_node": node_name,
         "history": state.get("history", []) + [f"Classified as {category} ({severity}). Reasoning: {reasoning}"]
     }
