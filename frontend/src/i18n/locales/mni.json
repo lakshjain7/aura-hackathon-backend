@@ -1,0 +1,10 @@
+{
+  "app": { "name": "AURA", "tagline": "ꯄꯕꯂꯤꯛ ꯒ꯭ꯔꯤꯚꯦꯟꯁꯁꯤꯡꯒꯤ ꯑꯦꯖꯦꯟꯇꯤꯛ ꯌꯨꯅꯤꯐꯥꯏꯗ ꯔꯤꯖꯣꯂꯨꯁꯟ" },
+  "hero": { "cta_file": "ꯑꯋꯥ ꯊꯝꯕꯤꯌꯨ", "cta_officer": "ꯑꯣꯐꯤꯁꯔ ꯂꯣꯒꯏꯟ" },
+  "complaint": {
+    "submit_title": "ꯑꯋꯥ ꯊꯝꯕꯤꯌꯨ", "textarea_label": "ꯅꯈꯣꯌꯒꯤ ꯑꯋꯥ ꯑꯗꯨ ꯆꯠꯅꯕꯤꯌꯨ",
+    "urgency_title": "ꯃꯁꯤ ꯀꯔꯝꯅ ꯃꯊꯧ ꯇꯥꯕꯒꯦ?",
+    "critical": "ꯀꯔꯤꯇꯤꯀꯦꯜ", "high": "ꯋꯥꯡꯕ", "medium": "ꯃꯤꯗꯤꯌꯝ", "low": "ꯅꯦꯝꯕ",
+    "submit": "ꯑꯋꯥ ꯊꯥꯕꯤꯌꯨ", "submitting": "AURA ꯅꯈꯣꯌꯒꯤ ꯑꯋꯥ ꯁꯦꯝꯒꯠꯂꯤ..."
+  }
+}

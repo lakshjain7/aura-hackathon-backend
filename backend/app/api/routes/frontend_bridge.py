@@ -1,0 +1,352 @@
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, text
+from app.core.database import get_db
+from app.models.complaint import Complaint
+from app.models.user import User
+from app.models.community import Community
+from app.agent.graph import aura_graph
+from typing import List, Optional
+import uuid
+import asyncio
+
+router = APIRouter()
+
+def is_valid_uuid(val):
+    try:
+        uuid.UUID(str(val))
+        return True
+    except ValueError:
+        return False
+
+# --- AUTH ALIASES ---
+
+@router.post("/auth/register")
+async def register_citizen(data: dict, db: AsyncSession = Depends(get_db)):
+    contact_id = f"whatsapp:+{data.get('phone')}"
+    res = await db.execute(select(User).where(User.contact_id == contact_id))
+    if res.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="User already registered")
+        
+    new_user = User(
+        name=data.get("name"),
+        contact_id=contact_id,
+        role=data.get("role", "citizen"),
+        language=data.get("language", "en")
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    return {"status": "success", "user_id": str(new_user.id), "role": new_user.role}
+
+@router.post("/auth/login")
+async def login_citizen(data: dict, db: AsyncSession = Depends(get_db)):
+    contact_id = f"whatsapp:+{data.get('phone')}"
+    res = await db.execute(select(User).where(User.contact_id == contact_id))
+    user = res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "success", "user": {"id": str(user.id), "name": user.name, "role": user.role}}
+
+# --- COMPLAINT ENDPOINTS ---
+
+import logging
+logger = logging.getLogger(__name__)
+
+@router.post("/complaint")
+async def submit_complaint(
+    raw_text: str = Form(...),
+    pincode: Optional[str] = Form(None),
+    lat: Optional[float] = Form(None),
+    lng: Optional[float] = Form(None),
+    suburb: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    language: str = Form("en"),
+    channel: str = Form("web"),
+    user_id: Optional[str] = Form(None),
+    severity_hint: Optional[str] = Form("medium"),
+    phone: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db)
+):
+    # Trigger the AURA Graph in the background
+    initial_state = {
+        "original_text": raw_text,
+        "source": "web",
+        "sender_id": "web_user",
+        "pincode": pincode,
+        "lat": lat,
+        "lng": lng,
+        "is_safe": True,
+        "history": []
+    }
+
+    complaint_id_str = None
+    severity = severity_hint or "medium"
+
+    # Run graph and return result
+    try:
+        final_state = await aura_graph.ainvoke(initial_state)
+        complaint_id_str = final_state.get("complaint_id")
+        severity = final_state.get("severity") or severity
+        result = {
+            "status": "success",
+            "complaint_id": complaint_id_str,
+            "category": final_state.get("category"),
+            "severity": severity
+        }
+    except Exception as e:
+        print(f"Graph execution error: {e}")
+        # Fallback to simple creation if graph fails
+        new_complaint = Complaint(
+            raw_text=raw_text,
+            pincode=pincode,
+            severity=severity_hint,
+            status="pending",
+            source="web"
+        )
+        db.add(new_complaint)
+        await db.commit()
+        await db.refresh(new_complaint)
+        complaint_id_str = str(new_complaint.id)
+        result = {"status": "success", "complaint_id": complaint_id_str}
+
+    # ── WhatsApp notification via Twilio ──
+    if phone and complaint_id_str:
+        from app.services.twilio_service import send_whatsapp_update
+        wa_number = phone.strip()
+        if not wa_number.startswith("+"):
+            wa_number = f"+91{wa_number}"
+        short_id = complaint_id_str[:8]
+        sev_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity.lower(), "🟡")
+        wa_msg = (
+            f"✅ *AURA — Complaint Received*\n\n"
+            f"🎫 *Tracking ID:* `{complaint_id_str}`\n"
+            f"{sev_emoji} *Severity:* {severity.upper()}\n"
+            f"💬 *Issue:* {raw_text[:150]}{'...' if len(raw_text) > 150 else ''}\n"
+            f"📍 *Pincode:* {pincode or 'N/A'}\n\n"
+            f"_AURA Civic Platform — Your voice matters._"
+        )
+        asyncio.create_task(asyncio.to_thread(send_whatsapp_update, wa_number, wa_msg))
+
+    # ── Discord channel notification ──
+    if complaint_id_str:
+        asyncio.create_task(_notify_discord(complaint_id_str, raw_text, severity, pincode or "", phone or ""))
+
+    return result
+
+
+async def _notify_discord(complaint_id: str, raw_text: str, severity: str, pincode: str, phone: str):
+    try:
+        from app.services.discord_bot import notify_new_complaint
+        await notify_new_complaint(complaint_id, raw_text, severity, pincode, phone)
+    except Exception as e:
+        logger.warning(f"Discord notification failed: {e}")
+
+@router.get("/complaints")
+async def get_user_complaints(user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    stmt = select(Complaint)
+    if user_id:
+        stmt = stmt.where(Complaint.citizen_id == str(user_id))
+    stmt = stmt.order_by(Complaint.created_at.desc())
+    res = await db.execute(stmt)
+    complaints = res.scalars().all()
+    return complaints
+
+@router.get("/complaint/{complaint_id}")
+async def get_complaint_detail(complaint_id: str, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(select(Complaint).where(Complaint.id == str(complaint_id)))
+    return res.scalar_one_or_none()
+
+# --- AUTH & OTP (Demo Mode) ---
+
+@router.post("/auth/request-otp")
+async def request_otp(data: dict):
+    return {"status": "success", "message": "OTP sent to " + data.get("phone")}
+
+@router.post("/auth/verify-otp")
+async def verify_otp(data: dict, db: AsyncSession = Depends(get_db)):
+    if data.get("otp") == "123456" or data.get("phone"):
+        contact_id = f"whatsapp:{data.get('phone')}"
+        res = await db.execute(select(User).where(User.contact_id == contact_id))
+        user = res.scalar_one_or_none()
+        
+        token = f"demo_token_{uuid.uuid4().hex}"
+        return {
+            "status": "success", 
+            "token": token,
+            "user": {"id": str(user.id) if user else None, "role": "citizen"}
+        }
+    raise HTTPException(status_code=400, detail="Invalid OTP")
+
+@router.get("/user/profile")
+async def get_profile(db: AsyncSession = Depends(get_db)):
+    return {"name": "Demo User", "points": 150}
+
+# --- ADMIN & CLUSTERS ---
+
+@router.get("/admin/stats")
+async def get_admin_stats():
+    return {
+        "total_complaints": 1240,
+        "resolved": 890,
+        "active_officers": 42,
+        "critical_zones": 5
+    }
+
+@router.get("/activity")
+async def get_activity(db: AsyncSession = Depends(get_db)):
+    res = await db.execute(text("SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10"))
+    logs = res.mappings().all()
+    return logs
+
+@router.get("/clusters")
+async def get_clusters_list(db: AsyncSession = Depends(get_db)):
+    from app.models.cluster import Cluster
+    res = await db.execute(select(Cluster))
+    return res.scalars().all()
+
+@router.get("/audit-logs")
+async def get_audit_logs(db: AsyncSession = Depends(get_db)):
+    from app.models.audit_log import AuditLog
+    res = await db.execute(select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(50))
+    return res.scalars().all()
+
+# --- COMMUNITY ENDPOINTS ---
+
+@router.get("/communities")
+async def get_communities(suburb: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    stmt = select(Community)
+    if suburb:
+        stmt = stmt.where(Community.suburb == suburb)
+    res = await db.execute(stmt)
+    return res.scalars().all()
+
+@router.post("/communities")
+async def create_community(data: dict, db: AsyncSession = Depends(get_db)):
+    new_comm = Community(
+        name=data.get("name"),
+        link=data.get("link"),
+        topic=data.get("topic") or "General",
+        suburb=data.get("suburb") or "General",
+        pincode=data.get("pincode"),
+        members_count=1
+    )
+    db.add(new_comm)
+    await db.commit()
+    await db.refresh(new_comm)
+    
+    # Trigger Twilio "Agent Provisioned" message with Setup Instructions
+    from app.services.twilio_service import send_whatsapp_update
+    creator_phone = data.get("phone", "8341137073")
+
+    provision_msg = (
+        f"🛡️ *AURA Agent Provisioned*\n\n"
+        f"I am ready to monitor *{new_comm.name}*! To activate me in the group, follow these 3 steps:\n\n"
+        f"1️⃣ *Add Contact:* Add +14155238886 to your phone as 'AURA Bot'.\n"
+        f"2️⃣ *Add to Group:* Invite 'AURA Bot' to your WhatsApp group.\n"
+        f"3️⃣ *Activate:* Tell members to send 'join <your-keyword>' to me to start receiving alerts.\n\n"
+        f"I'm standing by! 🚀"
+    )
+    send_whatsapp_update(f"+91{creator_phone}" if not creator_phone.startswith('+') else creator_phone, provision_msg)
+
+    
+    return new_comm
+
+@router.post("/communities/{community_id}/join")
+async def join_community(community_id: str, phone: str, db: AsyncSession = Depends(get_db)):
+    # 1. Increment member count
+    res = await db.execute(select(Community).where(Community.id == community_id))
+    comm = res.scalar_one_or_none()
+    if comm:
+        comm.members_count += 1
+        
+        # Fetch active issues in this suburb
+        issue_stmt = select(Complaint).where(Complaint.suburb == comm.suburb).limit(3)
+        issues_res = await db.execute(issue_stmt)
+        active_issues = issues_res.scalars().all()
+        
+        await db.commit()
+        
+        # 2. Trigger Twilio "Welcome to Community" message with briefing
+        from app.services.twilio_service import send_whatsapp_update
+
+        
+        briefing = ""
+        if active_issues:
+            briefing = "\n\n📍 *Active Neighborhood Issues:*\n" + "\n".join([f"• {i.category}: {i.summary[:50]}..." for i in active_issues])
+        
+        welcome_msg = f"🌟 *AURA Community Alert*\n\nWelcome to the *{comm.name}*! I am your AI Ward Assistant.{briefing}\n\nI'll keep you posted on local issues here. To file a report, just send me a voice note!"
+        send_whatsapp_update(phone if phone.startswith('+') else f"+91{phone}", welcome_msg)
+
+        
+    return {"status": "success"}
+
+from pydantic import BaseModel
+
+class CommunityGroup(BaseModel):
+    id: str
+    name: str
+    channel_name: str
+    topic: str = ""
+
+class JoinCommunityRequest(BaseModel):
+    user_name: str
+    user_phone: str
+    groups: List[CommunityGroup]
+
+@router.post("/community/join")
+async def join_community_discord(data: JoinCommunityRequest):
+    """
+    For each selected group:
+    - Create Discord channel if it doesn't exist
+    - Post a join notification
+    Returns invite info + server name + channel details.
+    """
+    from app.services.discord_bot import get_or_create_community_channel
+
+    invite_info: dict = {}
+    joined_channels = []
+
+    for group in data.groups:
+        try:
+            result = await get_or_create_community_channel(
+                channel_name=group.channel_name,
+                topic=group.topic,
+                user_name=data.user_name,
+            )
+            if result:
+                invite_info = result
+            joined_channels.append({
+                "name": group.name,
+                "channel": group.channel_name,
+                "created": result.get("channel_created", False),
+            })
+        except Exception as e:
+            logger.warning(f"Discord join error for {group.channel_name}: {e}")
+            joined_channels.append({"name": group.name, "channel": group.channel_name, "created": False})
+
+    return {
+        "status": "success",
+        "message": f"Joined {len(joined_channels)} communities on Discord.",
+        "discord_invite": invite_info.get("url", ""),
+        "discord_invite_code": invite_info.get("code", ""),
+        "server_name": invite_info.get("server_name", "AURA Discord Server"),
+        "joined_channels": joined_channels,
+    }
+
+
+@router.get("/community/discord-invite")
+async def get_discord_invite():
+    """Return a permanent Discord server invite link with server info."""
+    from app.services.discord_bot import get_server_invite
+    info = await get_server_invite()
+    return info if info else {"url": "", "code": "", "server_name": "", "guild_id": ""}
+
+
+# --- OFFICER ENDPOINTS ---
+
+@router.get("/officer/{officer_id}/assignments")
+async def get_assignments(officer_id: str, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(select(Complaint).where(Complaint.officer_id == str(officer_id)))
+    return res.scalars().all()

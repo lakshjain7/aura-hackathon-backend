@@ -1,0 +1,212 @@
+/* ══════════════════════════════════════════════════════════════════════
+   AURA Design Tokens — Merged from Airbnb + Notion + Stripe + USWDS
+   ══════════════════════════════════════════════════════════════════════
+   Airbnb:  warm near-black text, 3-layer card shadows, generous radius
+   Notion:  warm neutrals (#f6f5f4), whisper borders, 4-layer shadows
+   Stripe:  blue-tinted depth, conservative button radius, precision spacing
+   USWDS:   gray-warm palette, accessible contrast, civic trust colors
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds ──
+     Page: USWDS gray-warm-2 meets Notion warm-white.
+     Surface: pure white (Airbnb + Stripe + Notion all agree).
+     Muted: Notion warm-white #f6f5f4 for section alternation.
+     Subtle: USWDS gray-warm-5 for deeper alternation. */
+  --bg-page:      #FAFAF8;
+  --bg-surface:   #FFFFFF;
+  --bg-muted:     #F5F5F0;
+  --bg-subtle:    #EFEDE8;
+  --bg-overlay:   rgba(250,250,248,0.92);
+  --bg-elevated:  #FFFFFF;
+
+  /* ── Borders ──
+     Notion whisper philosophy: 1px rgba(0,0,0,0.08-0.10).
+     Three tiers for hierarchy. */
+  --border:        rgba(0,0,0,0.08);
+  --border-hover:  rgba(0,0,0,0.14);
+  --border-strong: rgba(0,0,0,0.20);
+  --border-focus:  var(--accent);
+
+  /* ── Accent — warm indigo-violet ──
+     Our #5B4CF5 sits between Stripe purple (#533afd) and
+     USWDS indigo-warm-50v (#745fe9). Rich but not electric. */
+  --accent:        #5B4CF5;
+  --accent-hover:  #4A3DE0;
+  --accent-deep:   #3D32B8;
+  --accent-light:  #EEF0FF;
+  --accent-muted:  rgba(91,76,245,0.08);
+  --accent-glow:   rgba(91,76,245,0.15);
+  --accent-surface:rgba(91,76,245,0.04);
+
+  /* ── Severity ──
+     USWDS-aligned civic status colors.
+     Each has foreground, background, and border for card states. */
+  --sev-critical:  #DC2626;
+  --sev-crit-bg:   #FEF2F2;
+  --sev-crit-bdr:  #FCA5A5;
+  --sev-high:      #EA580C;
+  --sev-high-bg:   #FFF7ED;
+  --sev-high-bdr:  #FDBA74;
+  --sev-medium:    #CA8A04;
+  --sev-med-bg:    #FEFCE8;
+  --sev-med-bdr:   #FDE047;
+  --sev-low:       #16A34A;
+  --sev-low-bg:    #F0FDF4;
+  --sev-low-bdr:   #86EFAC;
+  --sev-pending:   #6B7280;
+  --sev-pend-bg:   #F9FAFB;
+
+  /* ── Agent node states ── */
+  --node-wait-bg:  #F9F9F7;
+  --node-wait-bdr: rgba(0,0,0,0.08);
+  --node-run-bg:   #EEF0FF;
+  --node-run-bdr:  #5B4CF5;
+  --node-done-bg:  #F0FDF4;
+  --node-done-bdr: #16A34A;
+  --node-block-bg: #FEF2F2;
+  --node-block-bdr:#DC2626;
+  --node-rev-bg:   #FEFCE8;
+  --node-rev-bdr:  #CA8A04;
+
+  /* ── Text ──
+     Airbnb principle: warm near-black, not pure #000.
+     Notion principle: secondary has warm undertones.
+     Stripe principle: deep navy for headings. */
+  --text-primary:   #1A1A1A;
+  --text-secondary: #5C5C52;
+  --text-tertiary:  #94938C;
+  --text-accent:    #5B4CF5;
+  --text-inverse:   #FFFFFF;
+  --text-heading:   #1A1A1A;
+  --text-link:      #5B4CF5;
+  --text-link-hover:#4A3DE0;
+
+  /* ── Shadows ──
+     4-level system merging all three sources:
+     sm:  Notion whisper (barely-there, sub-0.05 opacity)
+     md:  Airbnb 3-layer warm lift (ring + soft + medium)
+     lg:  Stripe blue-tinted depth (rgba(50,50,93) adapted to our indigo)
+     xl:  Stripe deep elevation with negative spread for control */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm:  0 0 0 1px rgba(0,0,0,0.02),
+                0 1px 3px rgba(0,0,0,0.06),
+                0 2px 6px rgba(0,0,0,0.04);
+  --shadow-md:  0 0 0 1px rgba(0,0,0,0.02),
+                0 4px 12px rgba(0,0,0,0.06),
+                0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:  0 0 0 1px rgba(0,0,0,0.02),
+                0 12px 40px -8px rgba(45,40,80,0.12),
+                0 4px 12px rgba(0,0,0,0.05);
+  --shadow-xl:  0 24px 56px -12px rgba(45,40,80,0.14),
+                0 8px 20px -4px rgba(0,0,0,0.06);
+  --shadow-accent: 0 8px 32px rgba(91,76,245,0.18);
+
+  /* ── Typography ──
+     Inter matches Notion's NotionInter base.
+     JetBrains Mono for code/technical (like Stripe's SourceCodePro role). */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+  /* ── Type scale — Notion-inspired hierarchy with Airbnb warmth ── */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+  --text-4xl:  2.5rem;
+  --text-5xl:  3.25rem;
+
+  /* ── Letter spacing — progressive tightening (Notion + Stripe) ── */
+  --tracking-tight:  -0.02em;
+  --tracking-tighter:-0.03em;
+  --tracking-display:-0.04em;
+
+  /* ── Line heights — Notion: tighter at display, relaxed at body ── */
+  --leading-none:   1;
+  --leading-tight:  1.15;
+  --leading-snug:   1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed:1.625;
+
+  /* ── Spacing — 8px base (universal across all three) ── */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px;
+  --s6:24px; --s8:32px; --s10:40px; --s12:48px; --s16:64px; --s20:80px;
+
+  /* ── Radius ──
+     Stripe: 4-8px for buttons/inputs (conservative).
+     Airbnb: 14-20px for cards (generous, tactile).
+     Notion: 9999px for badges (pills). */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  14px;
+  --r-xl:  20px;
+  --r-2xl: 24px;
+  --r-full:9999px;
+
+  /* ── Motion ──
+     Stripe's precision meets Airbnb's warmth.
+     ease-out for exits, ease-spring for entrances. */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --t-fast:   150ms;
+  --t-normal: 250ms;
+  --t-slow:   400ms;
+  --t-reveal: 600ms;
+  --t-scenic: 900ms;
+
+  /* ── Z-index scale ── */
+  --z-base:    0;
+  --z-card:    10;
+  --z-sticky:  100;
+  --z-dropdown:200;
+  --z-overlay: 300;
+  --z-modal:   400;
+  --z-toast:   500;
+
+  /* ══════════════════════════════════════════════════════════════════
+     BACKWARDS-COMPAT ALIASES
+     Every old dark-theme token maps to its warm-light equivalent
+     so 30+ existing component files compile without code changes.
+     ══════════════════════════════════════════════════════════════════ */
+  --aura-bg-base:     var(--bg-page);
+  --aura-bg-surface:  var(--bg-surface);
+  --aura-bg-elevated: var(--bg-muted);
+  --aura-bg-overlay:  var(--bg-overlay);
+  --aura-border:      var(--border);
+  --aura-border-hover:var(--border-hover);
+  --aura-border-active:var(--accent);
+  --aura-accent:      var(--accent);
+  --aura-accent-hover:var(--accent-hover);
+  --aura-accent-light:var(--accent);
+  --aura-accent-glow: var(--accent-glow);
+  --aura-accent-subtle:var(--accent-muted);
+
+  --sev-critical-bg:     var(--sev-crit-bg);
+  --sev-critical-border: var(--sev-crit-bdr);
+  --sev-high-bg:         var(--sev-high-bg);
+  --sev-high-border:     var(--sev-high-bdr);
+  --sev-medium-bg:       var(--sev-med-bg);
+  --sev-medium-border:   var(--sev-med-bdr);
+  --sev-low-bg:          var(--sev-low-bg);
+  --sev-low-border:      var(--sev-low-bdr);
+  --sev-pending-bg:      var(--sev-pend-bg);
+
+  --node-waiting-bg:     var(--node-wait-bg);
+  --node-waiting-border: var(--node-wait-bdr);
+  --node-running-bg:     var(--node-run-bg);
+  --node-running-border: var(--node-run-bdr);
+  --node-complete-bg:    var(--node-done-bg);
+  --node-complete-border:var(--node-done-bdr);
+  --node-blocked-bg:     var(--node-block-bg);
+  --node-blocked-border: var(--node-block-bdr);
+  --node-review-bg:      var(--node-rev-bg);
+  --node-review-border:  var(--node-rev-bdr);
+
+  --text-critical: var(--sev-critical);
+  --text-success:  var(--sev-low);
+}

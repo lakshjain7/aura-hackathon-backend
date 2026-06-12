@@ -11,6 +11,8 @@ class Cluster(Base):
     category = Column(String, nullable=False)
     pincode = Column(String, nullable=False)
     count = Column(Integer, default=0)
+    zone_population = Column(Integer, default=100) # Simulating total people in this zone
     flagged_as_systemic = Column(Boolean, default=False)
     proactive_alert_sent = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+

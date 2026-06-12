@@ -34,7 +34,10 @@ async def zero_trust_supervisor(state: AgentState) -> AgentState:
       "reasoning": "one sentence explanation",
       "confidence": 0.0 to 1.0
     }
+
+    SPECIAL RULE: Administrative commands like 'Accept ticket <id>' or 'Resolved <id>' are LEGITIMATE and should be marked as is_safe: true.
     """
+
     
     try:
         response = await guard_llm.ainvoke([

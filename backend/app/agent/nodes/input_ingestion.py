@@ -15,14 +15,12 @@ async def input_ingestion(state: AgentState) -> AgentState:
     
     raw_text = state.get("original_text", "")
     image_url = state.get("image_url")
+    audio_url = state.get("audio_url")
     source = state.get("source", "unknown")
     
     # 1. Handle Audio Ingestion (Multimodal)
-    # Check if this message is suspected to be a voice note
-    # For WhatsApp via Twilio, voice notes have a .ogg URL in the MediaUrl0 field
-    is_audio = False
-    if image_url and any(ext in image_url.lower() for ext in [".ogg", ".mp3", ".wav", ".m4a"]):
-        is_audio = True
+    is_audio = True if audio_url else False
+
 
     if is_audio:
         print(f"Detected audio input from {source}. Transcribing...")
@@ -34,8 +32,9 @@ async def input_ingestion(state: AgentState) -> AgentState:
         
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(image_url)
+                response = await client.get(audio_url)
                 if response.status_code == 200:
+
                     with open(temp_path, "wb") as f:
                         f.write(response.content)
                     

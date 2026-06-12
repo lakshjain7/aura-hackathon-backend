@@ -1,19 +1,24 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-from app.integrations.sarvam_client import transcribe_and_translate_audio
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from app.integrations.sarvam_client import sarvam_client
 
 router = APIRouter()
 
-class TranslateRequest(BaseModel):
-    file_path: str
-    
 @router.post("/translate-audio")
-async def translate_text(req: TranslateRequest):
+async def translate_audio(audio: UploadFile = File(...)):
     """
-    Test endpoint for Sarvam AI audio translation.
+    Receives an audio file from the frontend and transcribes it into English using Sarvam AI.
     """
     try:
-        translated = await transcribe_and_translate_audio(req.file_path)
-        return {"translated_text": translated}
+        translated_text = await sarvam_client.transcribe_and_translate_audio(audio)
+        if not translated_text:
+            raise HTTPException(status_code=500, detail="Transcription failed")
+            
+        return {
+            "text": translated_text,
+            "transcription": translated_text,
+            "translated_text": translated_text
+        }
+
     except Exception as e:
-        return {"error": str(e)}
+        print(f"Route error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
